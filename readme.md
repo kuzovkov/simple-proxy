@@ -13,13 +13,32 @@ Run server:
 ./proxy_server
 Proxy Server listening on port 7000 (PID: 2945643)
 ```
+Options:
+```bash
+./proxy_server -h
+Usage: proxy_server [-x xor-byte]  [-l listen] [--help]
+
+Example:
+
+./proxy_server -l 8000 -x 0x55
+```
 
 Run client (on local machine):
 ```bash
 ./proxy_client
 Local Proxy listening on port 9000 for browser connections.
-Forwarding to Remote XOR-Proxy at 77.221.145.94:7000
+Forwarding to Remote XOR-Proxy at 78.125.145.15:7000
 ```
+
+Options:
+```bash
+./proxy_client -h
+Usage: proxy_client [-s server-host]  [-x xor-byte]  [-l listen]  [-p server-port] [--help]
+
+Example:
+./proxy_client -p 8000 -s 78.125.134.94 -l 9000 -x 0x55
+```
+
 Теперь Локальный Прокси-Сервер (proxy_client.c) будет принимать адрес цели от браузера
  и передавать его через зашифрованный туннель вашему удаленному серверу.
 Браузер, настраиваем на использование HTTP/HTTPS-прокси: 127.0.0.1:9000.
@@ -38,18 +57,15 @@ Description=Remote XOR Proxy Server (Data Obfuscation)
 After=network.target
 
 [Service]
-# Тип сервиса: forking, так как программа использует fork()
-# для обработки каждого соединения.
-Type=forking
-
-# Укажите путь к вашему скомпилированному исполняемому файлу
-ExecStart=/usr/local/bin/proxy_server
-
-# Пользователь, от имени которого будет запущен сервис
-# (Рекомендуется создать отдельного непривилегированного пользователя, 
-# но root часто используется для прослушивания низких портов, хотя 8888 не низкий)
-User=root 
-Group=root
+[Service]
+Type=simple
+ExecStart=/home/ubuntu/proxy_server
+User=ubuntu
+Group=ubuntu
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
 
 # Автоматический перезапуск в случае сбоя
 Restart=always
@@ -61,6 +77,7 @@ StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
+
 ```
 
 #### Конфиг для Локального Прокси-Сервера (Клиент XOR)
@@ -73,29 +90,31 @@ WantedBy=multi-user.target
 
 ```bash
 [Unit]
-Description=Local HTTP CONNECT to Remote XOR Proxy
+Description=Remote XOR Proxy Server (Data Obfuscation)
 After=network.target
 
 [Service]
-# Этот сервис также использует fork()
-Type=forking
-
-# Замените путь, если он отличается
-ExecStart=/usr/local/bin/local_proxy
-
-# Пользователь, от имени которого будет запущен сервис (можно использовать менее привилегированного пользователя)
-User=root 
-Group=root
+[Service]
+Type=simple
+ExecStart=/home/ubuntu/proxy_client
+User=ubuntu
+Group=ubuntu
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
 
 # Автоматический перезапуск в случае сбоя
 Restart=always
 RestartSec=5s
 
+# Стандартный вывод и ошибки будут перенаправлены в журнал systemd (journalctl)
 StandardOutput=journal
 StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
+
 ```
 🚀 Активация и запуск сервисов
 
@@ -113,8 +132,8 @@ sudo systemctl daemon-reload
 Включите сервисы, чтобы они запускались автоматически при загрузке системы.
 Bash
 ```bash
-sudo systemctl enable remote-xor-proxy.service
-sudo systemctl enable local-http-proxy.service
+sudo systemctl enable xor-proxy.service
+sudo systemctl enable http-proxy.service
 ```
 Шаг 3: Запуск сервисов
 

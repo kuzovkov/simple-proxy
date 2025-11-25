@@ -9,13 +9,19 @@
 #include <netdb.h>
 #include <sys/select.h>
 #include <time.h> // Для таймаута
+#include <getopt.h>
+#include <signal.h>
 
 // --- Общий код и настройки ---
-#define XOR_KEY 0xAB
-#define PROXY_PORT 7000
+#define XOR_KEY_DEFAULT 0xAB
+#define PROXY_PORT_DEFAULT 7000
 #define BUFFER_SIZE 4096
 #define MAX_HOSTNAME_LEN 255
 #define TIMEOUT_SEC 5 // Таймаут для чтения заголовка
+
+uint16_t PROXY_PORT = 7000;
+unsigned char XOR_KEY = 0xAB; 
+
 
 // Функция XOR-шифрования/дешифрования
 void xor_data(char* data, int len) {
@@ -193,7 +199,7 @@ void handle_connection(int client_sock) {
     // Завершение
     close(target_sock);
     close(client_sock);
-    exit(0); 
+    return; 
 }
 
 void clean_up_zombies() {
@@ -201,10 +207,34 @@ void clean_up_zombies() {
     while (waitpid(-1, NULL, WNOHANG) > 0);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     int listen_sock, client_sock;
     struct sockaddr_in proxy_addr;
     pid_t pid;
+    int option;
+
+    struct option long_opts[] = {
+        {"xor-byte", required_argument, 0, 'x'},
+        {"listen", required_argument, 0, 'l'},
+        {"help", no_argument,       0, 'h'},
+        {0, 0, 0, 0}
+    };
+
+    while ((option = getopt_long(argc, argv, "x:l:h", long_opts, NULL)) != -1) {
+        switch (option) {
+            case 'x':
+                XOR_KEY = (unsigned char) strtoul(optarg, NULL, 0);
+                break;
+            case 'l':
+                PROXY_PORT = (uint16_t) atoi(optarg);
+                break;
+            case 'h':
+                printf("Usage: proxy_server [-x xor-byte]  [-l listen] [--help]\n");
+                return 0;
+            default:
+                return 1;
+        }
+    }
 
     // 1. Настройка Прослушивающего сокета
     listen_sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -224,16 +254,16 @@ int main() {
     if (listen(listen_sock, 10) < 0) {
         perror("listen"); close(listen_sock); return 1;
     }
-    printf("Proxy Server listening on port %d (PID: %d)\n", PROXY_PORT, getpid());
+    printf("Proxy Server listening on port %d (PID: %d) (XOR_KEY: 0x%02X) \n", PROXY_PORT, getpid(), (unsigned int)XOR_KEY);
 
     // 2. Главный цикл приема соединений
     while (1) {
-        clean_up_zombies();
-
+        //clean_up_zombies();
+        signal(SIGCHLD, SIG_IGN);
         client_sock = accept(listen_sock, NULL, NULL);
         if (client_sock < 0) {
             if (errno == EINTR) continue;
-            perror("accept");
+            perror("accept(server)");
             continue;
         }
         
@@ -248,6 +278,7 @@ int main() {
             // ДОЧЕРНИЙ ПРОЦЕСС
             close(listen_sock); 
             handle_connection(client_sock);
+            _exit(0);
         } else {
             // РОДИТЕЛЬСКИЙ ПРОЦЕСС
             close(client_sock); 

@@ -8,14 +8,22 @@
 #include <errno.h>
 #include <netdb.h>
 #include <sys/select.h>
+#include <getopt.h>
+#include <signal.h>
 
 // --- Общий код и настройки ---
-#define XOR_KEY 0xAB
-#define LOCAL_PROXY_PORT 9000    // Порт, который должен использовать браузер
-#define REMOTE_PROXY_IP "77.221.145.94" // IP вашего Удаленного XOR-сервера
-#define REMOTE_PROXY_PORT 7000   // Порт вашего Удаленного XOR-сервера
+#define XOR_KEY_DEFAULT 0xAB
+#define LOCAL_PROXY_PORT_DEFAULT 9000    // Порт, который должен использовать браузер
+#define REMOTE_PROXY_IP_DEFAULT "77.221.145.94" // IP вашего Удаленного XOR-сервера
+#define REMOTE_PROXY_PORT_DEFAULT 7000   // Порт вашего Удаленного XOR-сервера
 #define BUFFER_SIZE 4096
 #define MAX_HOSTNAME_LEN 255
+
+
+uint16_t LOCAL_PROXY_PORT = 9000;
+uint16_t REMOTE_PROXY_PORT = 7000;
+unsigned char XOR_KEY = 0xAB; 
+char REMOTE_PROXY_IP[15] = "77.221.145.94"; 
 
 void xor_data(char* data, int len) {
     for (int i = 0; i < len; ++i) {
@@ -206,18 +214,53 @@ void handle_browser_connection(int browser_sock) {
     printf("Child %d: Connection closed.\n", getpid());
     close(remote_sock);
     close(browser_sock);
-    exit(0); 
+    //_exit(0);
+    return; 
 }
 
 void clean_up_zombies() {
     while (waitpid(-1, NULL, WNOHANG) > 0);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     int listen_sock, browser_sock;
     struct sockaddr_in proxy_addr;
     pid_t pid;
+    int option;
+    
+    struct option long_opts[] = {
+        {"server-host", required_argument, 0, 's'},
+        {"xor-byte", required_argument, 0, 'x'},
+        {"listen", required_argument, 0, 'l'},
+        {"server-port", required_argument, 0, 'p'},
+        {"help", no_argument,       0, 'h'},
+        {0, 0, 0, 0}
+    };
 
+    while ((option = getopt_long(argc, argv, "s:x:l:p:h", long_opts, NULL)) != -1) {
+        switch (option) {
+            case 's':
+                strcpy(REMOTE_PROXY_IP, optarg);
+                break;
+            case 'x':
+                XOR_KEY = (unsigned char) strtoul(optarg, NULL, 0);
+                break;
+            case 'l':
+                LOCAL_PROXY_PORT = (uint16_t) atoi(optarg);
+                break;
+            case 'p':
+                REMOTE_PROXY_PORT = (uint16_t) atoi(optarg);
+                break;
+            case 'h':
+                printf("Usage: proxy_client [-s server-host]  [-x xor-byte]  [-l listen]  [-p server-port] [--help]\n");
+                return 0;
+            default:
+                return 1;
+        }
+    }
+
+    printf("REMOTE_PROXY_IP: %s\nLOCAL_PROXY_PORT: %i\nREMOTE_PROXY_PORT: %i\nXOR_KEY: 0x%02X \n",
+         REMOTE_PROXY_IP, LOCAL_PROXY_PORT, REMOTE_PROXY_PORT, (unsigned int)XOR_KEY);
     // 1. Настройка Прослушивающего сокета
     listen_sock = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_sock == -1) { perror("socket"); return 1; }
@@ -241,12 +284,13 @@ int main() {
 
     // 2. Главный цикл приема соединений
     while (1) {
-        clean_up_zombies();
+        //clean_up_zombies();
+        signal(SIGCHLD, SIG_IGN);
 
         browser_sock = accept(listen_sock, NULL, NULL);
         if (browser_sock < 0) {
             if (errno == EINTR) continue;
-            perror("accept");
+            perror("accept(client)");
             continue;
         }
         
@@ -259,6 +303,7 @@ int main() {
             // ДОЧЕРНИЙ ПРОЦЕСС
             close(listen_sock); 
             handle_browser_connection(browser_sock);
+            _exit(0);
         } else {
             // РОДИТЕЛЬСКИЙ ПРОЦЕСС
             close(browser_sock); 
