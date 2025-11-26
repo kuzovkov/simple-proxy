@@ -1,8 +1,8 @@
 ### Compile
 
 ```bash
-gcc -Wall proxy_server.c -o proxy_server
-gcc -Wall proxy_client.c -o proxy_client
+gcc -Wall proxy_server.c sha256.c hmac.c -o proxy_server
+gcc -Wall proxy_client.c sha256.c hmac.c -o proxy_client
 ```
 
 ### Usage

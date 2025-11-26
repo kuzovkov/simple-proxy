@@ -11,6 +11,7 @@
 #include <time.h> // Для таймаута
 #include <getopt.h>
 #include <signal.h>
+#include "hmac.h"
 
 // --- Общий код и настройки ---
 #define XOR_KEY_DEFAULT 0xAB
@@ -20,7 +21,8 @@
 #define TIMEOUT_SEC 5 // Таймаут для чтения заголовка
 
 uint16_t PROXY_PORT = 7000;
-unsigned char XOR_KEY = 0xAB; 
+unsigned char XOR_KEY = 0xAB;
+char SERVER_PASSWORD[128] = "P@ssw0rd"; 
 
 
 // Функция XOR-шифрования/дешифрования
@@ -151,6 +153,42 @@ int read_and_process_header(int client_sock, int* target_sock_ptr) {
 
 
 void handle_connection(int client_sock) {
+    // 1. Сервер генерирует challenge
+    uint8_t challenge[32];
+    for (int i = 0; i < 32; i++)
+        challenge[i] = rand() & 0xFF;
+
+    // отправляем challenge клиенту
+    send(client_sock, challenge, 32, 0);
+
+    // 2. Ждём HMAC от клиента
+    uint8_t client_hmac[32];
+    int n = recv(client_sock, client_hmac, 32, 0);
+    if (n != 32) {
+        close(client_sock);
+        return;
+    }
+
+    // 3. Считаем ожидаемый HMAC
+    uint8_t expected_hmac[32];
+    hmac_sha256(
+        (uint8_t*)SERVER_PASSWORD,
+        strlen(SERVER_PASSWORD),
+        challenge,
+        32,
+        expected_hmac
+    );
+
+    // 4. Сравниваем
+    if (memcmp(client_hmac, expected_hmac, 32) != 0) {
+        printf("Auth failed\n");
+        close(client_sock);
+        return;
+    }
+
+    printf("Auth OK\n");
+
+
     int target_sock = -1;
     char buffer[BUFFER_SIZE];
     fd_set read_fds;
@@ -216,17 +254,21 @@ int main(int argc, char *argv[]) {
     struct option long_opts[] = {
         {"xor-byte", required_argument, 0, 'x'},
         {"listen", required_argument, 0, 'l'},
+        {"secret-key", required_argument, 0, 'k'},
         {"help", no_argument,       0, 'h'},
         {0, 0, 0, 0}
     };
 
-    while ((option = getopt_long(argc, argv, "x:l:h", long_opts, NULL)) != -1) {
+    while ((option = getopt_long(argc, argv, "x:l:k:h", long_opts, NULL)) != -1) {
         switch (option) {
             case 'x':
                 XOR_KEY = (unsigned char) strtoul(optarg, NULL, 0);
                 break;
             case 'l':
                 PROXY_PORT = (uint16_t) atoi(optarg);
+                break;
+            case 'k':
+                strcpy(SERVER_PASSWORD, optarg);
                 break;
             case 'h':
                 printf("Usage: proxy_server [-x xor-byte]  [-l listen] [--help]\n");

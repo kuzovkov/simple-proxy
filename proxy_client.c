@@ -10,6 +10,7 @@
 #include <sys/select.h>
 #include <getopt.h>
 #include <signal.h>
+#include "hmac.h"
 
 // --- Общий код и настройки ---
 #define XOR_KEY_DEFAULT 0xAB
@@ -24,6 +25,7 @@ uint16_t LOCAL_PROXY_PORT = 9000;
 uint16_t REMOTE_PROXY_PORT = 7000;
 unsigned char XOR_KEY = 0xAB; 
 char REMOTE_PROXY_IP[15] = "77.221.145.94"; 
+char SERVER_PASSWORD[128] = "P@ssw0rd"; 
 
 void xor_data(char* data, int len) {
     for (int i = 0; i < len; ++i) {
@@ -113,6 +115,27 @@ int connect_to_remote_proxy() {
     }
     
     printf("Child %d: Connected to remote XOR-Proxy %s:%d\n", getpid(), REMOTE_PROXY_IP, REMOTE_PROXY_PORT);
+    // 1. Получаем challenge от сервера
+    uint8_t challenge[32];
+    int n = recv(remote_sock, challenge, 32, 0);
+    if (n != 32) {
+        printf("Server sent no challenge!\n");
+        return -1;
+    }
+
+    // 2. Вычисляем HMAC
+    uint8_t my_hmac[32];
+    hmac_sha256(
+        (uint8_t*)SERVER_PASSWORD,
+        strlen(SERVER_PASSWORD),
+        challenge,
+        32,
+        my_hmac
+    );
+
+    // 3. Отправляем серверу
+    send(remote_sock, my_hmac, 32, 0);
+
     return remote_sock;
 }
 
@@ -233,14 +256,18 @@ int main(int argc, char *argv[]) {
         {"xor-byte", required_argument, 0, 'x'},
         {"listen", required_argument, 0, 'l'},
         {"server-port", required_argument, 0, 'p'},
+        {"secret-key", required_argument, 0, 'k'},
         {"help", no_argument,       0, 'h'},
         {0, 0, 0, 0}
     };
 
-    while ((option = getopt_long(argc, argv, "s:x:l:p:h", long_opts, NULL)) != -1) {
+    while ((option = getopt_long(argc, argv, "s:x:l:p:k:h", long_opts, NULL)) != -1) {
         switch (option) {
             case 's':
                 strcpy(REMOTE_PROXY_IP, optarg);
+                break;
+            case 'k':
+                strcpy(SERVER_PASSWORD, optarg);
                 break;
             case 'x':
                 XOR_KEY = (unsigned char) strtoul(optarg, NULL, 0);
