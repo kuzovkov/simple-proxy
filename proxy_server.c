@@ -271,7 +271,7 @@ int main(int argc, char *argv[]) {
                 strcpy(SERVER_PASSWORD, optarg);
                 break;
             case 'h':
-                printf("Usage: proxy_server [-x xor-byte]  [-l listen] [--help]\n");
+                printf("Usage: proxy_server [-x xor-byte]  [-l listen] [-k secret-key][--help]\n");
                 return 0;
             default:
                 return 1;

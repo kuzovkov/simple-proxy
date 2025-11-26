@@ -16,7 +16,7 @@ Proxy Server listening on port 7000 (PID: 2945643)
 Options:
 ```bash
 ./proxy_server -h
-Usage: proxy_server [-x xor-byte]  [-l listen] [--help]
+Usage: proxy_server [-x xor-byte] [-l listen] [-k secret-key][--help]
 
 Example:
 
@@ -33,7 +33,7 @@ Forwarding to Remote XOR-Proxy at 78.125.145.15:7000
 Options:
 ```bash
 ./proxy_client -h
-Usage: proxy_client [-s server-host]  [-x xor-byte]  [-l listen]  [-p server-port] [--help]
+Usage: proxy_client [-s server-host]  [-x xor-byte] [-l listen] [-k secret-key] [-p server-port] [--help]
 
 Example:
 ./proxy_client -p 8000 -s 78.125.134.94 -l 9000 -x 0x55
@@ -59,7 +59,7 @@ After=network.target
 [Service]
 [Service]
 Type=simple
-ExecStart=/home/ubuntu/proxy_server
+ExecStart=/home/ubuntu/proxy_server -k superpassword
 User=ubuntu
 Group=ubuntu
 Restart=always
@@ -96,7 +96,7 @@ After=network.target
 [Service]
 [Service]
 Type=simple
-ExecStart=/home/ubuntu/proxy_client
+ExecStart=/home/ubuntu/proxy_client -k superpassword
 User=ubuntu
 Group=ubuntu
 Restart=always
@@ -118,7 +118,7 @@ WantedBy=multi-user.target
 ```
 🚀 Активация и запуск сервисов
 
-После создания файлов выполните следующие команды для каждого сервиса (например, сначала для remote-xor-proxy):
+После создания файлов выполните следующие команды для каждого сервиса (например, сначала для xor-proxy):
 
 Шаг 1: Перезагрузка systemd
 

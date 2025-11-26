@@ -279,7 +279,7 @@ int main(int argc, char *argv[]) {
                 REMOTE_PROXY_PORT = (uint16_t) atoi(optarg);
                 break;
             case 'h':
-                printf("Usage: proxy_client [-s server-host]  [-x xor-byte]  [-l listen]  [-p server-port] [--help]\n");
+                printf("Usage: proxy_client [-s server-host] [-x xor-byte] [-l listen] [-k secret-key] [-p server-port] [--help]\n");
                 return 0;
             default:
                 return 1;
